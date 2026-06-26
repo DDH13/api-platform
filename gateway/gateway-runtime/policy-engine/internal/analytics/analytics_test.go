@@ -138,6 +138,20 @@ func TestNewAnalytics_EnabledWithUnknownPublisherType(t *testing.T) {
 	assert.Empty(t, analytics.publishers) // Unknown type should not be added
 }
 
+func TestNewAnalytics_EnabledWithLogPublisher(t *testing.T) {
+	cfg := &config.Config{
+		Analytics: config.AnalyticsConfig{
+			Enabled:           true,
+			EnabledPublishers: []string{LogAnalyticsPublisher},
+		},
+	}
+
+	analytics := NewAnalytics(cfg)
+
+	require.NotNil(t, analytics)
+	assert.Len(t, analytics.publishers, 1) // log publisher should be registered
+}
+
 // =============================================================================
 // isInvalid Tests
 // =============================================================================

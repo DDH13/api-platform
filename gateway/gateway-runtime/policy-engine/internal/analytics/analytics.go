@@ -59,6 +59,8 @@ const (
 	DefaultAnalyticsPublisher = "default"
 	// MoesifAnalyticsPublisher represents the Moesif analytics publisher.
 	MoesifAnalyticsPublisher = "moesif"
+	// LogAnalyticsPublisher represents the stdout/log analytics publisher.
+	LogAnalyticsPublisher = "log"
 
 	// HeaderKeys represents the header keys.
 	RequestHeadersKey  = "request_headers"
@@ -97,12 +99,16 @@ func NewAnalytics(cfg *config.Config) *Analytics {
 	if analyticsCfg.Enabled {
 		for _, publisherName := range analyticsCfg.EnabledPublishers {
 			switch publisherName {
-			case "moesif":
+			case MoesifAnalyticsPublisher:
 				publisher := analytics_publisher.NewMoesif(&analyticsCfg.Publishers.Moesif)
 				if publisher != nil {
 					publishers = append(publishers, publisher)
 					slog.Info("Moesif publisher added")
 				}
+			case LogAnalyticsPublisher:
+				publisher := analytics_publisher.NewLog(&analyticsCfg.Publishers.Log)
+				publishers = append(publishers, publisher)
+				slog.Info("Log publisher added")
 			default:
 				slog.Warn("Unknown publisher type", "type", publisherName)
 			}
