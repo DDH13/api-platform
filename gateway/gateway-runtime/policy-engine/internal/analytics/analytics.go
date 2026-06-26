@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"maps"
 	"strconv"
+	"strings"
 	"time"
 
 	v3 "github.com/envoyproxy/go-control-plane/envoy/data/accesslog/v3"
@@ -139,6 +140,12 @@ func (c *Analytics) Process(event *v3.HTTPAccessLogEntry) {
 		return
 	}
 
+	// Skip analytics entirely for configured ignored path prefixes (e.g. health probes).
+	if c.isPathIgnored(event) {
+		slog.Debug("Analytics event skipped for ignored path")
+		return
+	}
+
 	// Add logic to publish the event
 	analyticEvent := c.prepareAnalyticEvent(event)
 	for _, publisher := range c.publishers {
@@ -150,6 +157,33 @@ func (c *Analytics) Process(event *v3.HTTPAccessLogEntry) {
 // isInvalid checks if the log entry is invalid.
 func (c *Analytics) isInvalid(logEntry *v3.HTTPAccessLogEntry) bool {
 	return logEntry.GetResponse() == nil
+}
+
+// isPathIgnored reports whether the entry's original request path matches any
+// configured analytics.ignored_path_prefixes entry. The original (pre-rewrite)
+// path is preferred so prefixes match the client-facing path.
+func (c *Analytics) isPathIgnored(logEntry *v3.HTTPAccessLogEntry) bool {
+	prefixes := c.cfg.Analytics.IgnoredPathPrefixes
+	if len(prefixes) == 0 {
+		return false
+	}
+	req := logEntry.GetRequest()
+	if req == nil {
+		return false
+	}
+	path := req.GetOriginalPath()
+	if path == "" {
+		path = req.GetPath()
+	}
+	if path == "" {
+		return false
+	}
+	for _, prefix := range prefixes {
+		if prefix = strings.TrimSpace(prefix); prefix != "" && strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetFaultType returns the fault type.

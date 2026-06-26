@@ -293,12 +293,20 @@ enabled = false
 allow_payloads = false
 send_request_body = false
 send_response_body = false
+# Max bytes captured per request/response body when send_*_body is enabled.
+# 0 = no limit; a positive value truncates each body to that many bytes.
+max_payload_size = 0
 # Capture ALL request/response headers into analytics events (request_headers/
 # response_headers). Applies to every API via the analytics system policy, so no
 # per-API header policy is needed. Sensitive values are redacted on output by the
 # log publisher's masked_headers setting.
 send_request_headers = false
 send_response_headers = false
+# Suppress analytics events (and therefore all publisher output, including the
+# stdout/log publisher) for requests whose original path starts with any of these
+# prefixes. Useful for excluding health/readiness probes. Matching uses the
+# client-facing (pre-rewrite) path.
+ignored_path_prefixes = []
 # Publishers that receive analytics events. Supported: "moesif" (sends to the
 # Moesif SaaS) and "log" (writes each enriched event to stdout as JSON — useful
 # for log-scraping pipelines such as Fluent Bit/Loki/ELK). Multiple publishers
