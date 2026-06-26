@@ -267,6 +267,60 @@ func TestProcess_WithMockPublisher(t *testing.T) {
 	assert.Equal(t, "TestAPI", mockPub.event.API.APIName)
 }
 
+func TestIsPathIgnored(t *testing.T) {
+	a := NewAnalytics(&config.Config{
+		Analytics: config.AnalyticsConfig{IgnoredPathPrefixes: []string{"/health", "/ready"}},
+	})
+
+	mk := func(orig, path string) *v3.HTTPAccessLogEntry {
+		return &v3.HTTPAccessLogEntry{Request: &v3.HTTPRequestProperties{OriginalPath: orig, Path: path}}
+	}
+
+	assert.True(t, a.isPathIgnored(mk("/health", "")))
+	assert.True(t, a.isPathIgnored(mk("/health/live", "")))
+	assert.True(t, a.isPathIgnored(mk("", "/ready"))) // falls back to Path
+	assert.False(t, a.isPathIgnored(mk("/api/v1/orders", "")))
+	assert.False(t, a.isPathIgnored(mk("", "")))
+}
+
+func TestIsPathIgnored_NoPrefixesConfigured(t *testing.T) {
+	a := NewAnalytics(&config.Config{})
+	entry := &v3.HTTPAccessLogEntry{Request: &v3.HTTPRequestProperties{OriginalPath: "/health"}}
+	assert.False(t, a.isPathIgnored(entry))
+}
+
+func TestProcess_SkipsIgnoredPath(t *testing.T) {
+	analytics := NewAnalytics(&config.Config{
+		Analytics: config.AnalyticsConfig{IgnoredPathPrefixes: []string{"/health"}},
+	})
+	mockPub := &mockPublisher{}
+	analytics.publishers = append(analytics.publishers, mockPub)
+
+	logEntry := &v3.HTTPAccessLogEntry{
+		Response: &v3.HTTPResponseProperties{ResponseCode: wrapperspb.UInt32(200)},
+		Request:  &v3.HTTPRequestProperties{OriginalPath: "/health", RequestMethod: corev3.RequestMethod_GET},
+	}
+	analytics.Process(logEntry)
+
+	assert.False(t, mockPub.called, "publisher must not be called for an ignored path")
+}
+
+func TestProcess_PublishesNonIgnoredPath(t *testing.T) {
+	analytics := NewAnalytics(&config.Config{
+		Analytics: config.AnalyticsConfig{IgnoredPathPrefixes: []string{"/health"}},
+	})
+	mockPub := &mockPublisher{}
+	analytics.publishers = append(analytics.publishers, mockPub)
+
+	logEntry := &v3.HTTPAccessLogEntry{
+		Response: &v3.HTTPResponseProperties{ResponseCode: wrapperspb.UInt32(200)},
+		Request:  &v3.HTTPRequestProperties{OriginalPath: "/api/v1/orders", RequestMethod: corev3.RequestMethod_GET},
+	}
+	analytics.Process(logEntry)
+
+	assert.True(t, mockPub.called, "publisher must be called for a non-ignored path")
+}
+
 func TestProcess_PanicRecovery(t *testing.T) {
 	cfg := &config.Config{}
 	analytics := NewAnalytics(cfg)

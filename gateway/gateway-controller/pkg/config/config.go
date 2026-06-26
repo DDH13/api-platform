@@ -79,6 +79,10 @@ type AnalyticsConfig struct {
 	// flow into analytics events without attaching a per-API header policy.
 	SendRequestHeaders  bool `koanf:"send_request_headers"`
 	SendResponseHeaders bool `koanf:"send_response_headers"`
+	// MaxPayloadSize caps the number of bytes captured per request/response body
+	// when send_request_body / send_response_body is enabled. 0 (the default)
+	// means no limit; a positive value truncates each body to that many bytes.
+	MaxPayloadSize int `koanf:"max_payload_size"`
 }
 
 // SubscriptionsConfig holds configuration for application-level subscriptions.
@@ -933,6 +937,7 @@ func defaultConfig() *Config {
 			SendResponseBody:    false,
 			SendRequestHeaders:  false,
 			SendResponseHeaders: false,
+			MaxPayloadSize:      0,
 		},
 		TracingConfig: TracingConfig{
 			Enabled:        false,

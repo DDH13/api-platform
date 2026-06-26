@@ -63,6 +63,10 @@ type AnalyticsConfig struct {
 	AllowPayloads    bool `koanf:"allow_payloads"`
 	SendRequestBody  bool `koanf:"send_request_body"`
 	SendResponseBody bool `koanf:"send_response_body"`
+	// IgnoredPathPrefixes suppresses analytics events (and therefore all
+	// publisher output, including the stdout/log publisher) for requests whose
+	// original path starts with any of these prefixes, e.g. health-check probes.
+	IgnoredPathPrefixes []string `koanf:"ignored_path_prefixes"`
 }
 
 // AnalyticsPublishersConfig holds configuration for all analytics publishers
@@ -394,9 +398,10 @@ func defaultConfig() *Config {
 				ExtProcMaxMessageSize: 1000000000,
 				ExtProcMaxHeaderLimit: 8192,
 			},
-			AllowPayloads:    false,
-			SendRequestBody:  false,
-			SendResponseBody: false,
+			AllowPayloads:       false,
+			SendRequestBody:     false,
+			SendResponseBody:    false,
+			IgnoredPathPrefixes: []string{},
 		},
 		TracingConfig: TracingConfig{
 			Enabled:            false,

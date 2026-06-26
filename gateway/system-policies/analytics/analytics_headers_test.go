@@ -57,3 +57,41 @@ func TestSerializeHeaders(t *testing.T) {
 		t.Errorf("x-foo = %q, want %q", decoded["x-foo"], "a, b")
 	}
 }
+
+func TestGetMaxPayloadSize(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]interface{}
+		want   int
+	}{
+		{"nil", nil, 0},
+		{"absent", map[string]interface{}{}, 0},
+		{"int", map[string]interface{}{"max_payload_size": 2048}, 2048},
+		{"float64", map[string]interface{}{"max_payload_size": float64(1024)}, 1024},
+		{"string", map[string]interface{}{"max_payload_size": "512"}, 512},
+		{"bad string", map[string]interface{}{"max_payload_size": "abc"}, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := getMaxPayloadSize(c.params); got != c.want {
+				t.Fatalf("getMaxPayloadSize(%v) = %d, want %d", c.params, got, c.want)
+			}
+		})
+	}
+}
+
+func TestTruncatePayload(t *testing.T) {
+	body := []byte("hello world")
+	if got := truncatePayload(body, 0); got != "hello world" {
+		t.Errorf("max=0 (no limit) = %q, want full body", got)
+	}
+	if got := truncatePayload(body, 100); got != "hello world" {
+		t.Errorf("max>len = %q, want full body", got)
+	}
+	if got := truncatePayload(body, 5); got != "hello" {
+		t.Errorf("max=5 = %q, want %q", got, "hello")
+	}
+	if got := truncatePayload([]byte{}, 5); got != "" {
+		t.Errorf("empty body = %q, want \"\"", got)
+	}
+}

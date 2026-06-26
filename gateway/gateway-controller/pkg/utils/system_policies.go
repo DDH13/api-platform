@@ -93,6 +93,7 @@ var defaultSystemPolicies = []systemPolicyConfig{
 			"send_response_body":    false,
 			"send_request_headers":  false,
 			"send_response_headers": false,
+			"max_payload_size":      0,
 		},
 		ExecutionCondition: nil,
 	},
@@ -206,6 +207,7 @@ func InjectSystemPolicies(policies []policyenginev1.PolicyInstance, cfg *config.
 				effectiveDefaults["send_response_body"] = cfg.Analytics.SendResponseBody
 				effectiveDefaults["send_request_headers"] = cfg.Analytics.SendRequestHeaders
 				effectiveDefaults["send_response_headers"] = cfg.Analytics.SendResponseHeaders
+				effectiveDefaults["max_payload_size"] = cfg.Analytics.MaxPayloadSize
 			}
 
 			// Merge parameters efficiently

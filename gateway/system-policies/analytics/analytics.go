@@ -228,7 +228,7 @@ func (a *AnalyticsPolicy) OnRequestBody(_ context.Context, ctx *policy.RequestCo
 	// When request payload capture is enabled, capture the raw request body into analytics metadata.
 	if sendReqBody && ctx != nil && ctx.Body != nil && len(ctx.Body.Content) > 0 {
 		slog.Debug("Capturing request payload for analytics")
-		analyticsMetadata["request_payload"] = string(ctx.Body.Content)
+		analyticsMetadata["request_payload"] = truncatePayload(ctx.Body.Content, getMaxPayloadSize(params))
 	}
 
 	apiKind := ctx.SharedContext.APIKind
@@ -398,7 +398,7 @@ func (a *AnalyticsPolicy) OnResponseBody(_ context.Context, ctx *policy.Response
 	if sendRespBody {
 		if ctx != nil && ctx.ResponseBody != nil && len(ctx.ResponseBody.Content) > 0 {
 			slog.Debug("Capturing response payload for analytics")
-			analyticsMetadata["response_payload"] = string(ctx.ResponseBody.Content)
+			analyticsMetadata["response_payload"] = truncatePayload(ctx.ResponseBody.Content, getMaxPayloadSize(params))
 		}
 	}
 
@@ -495,7 +495,7 @@ func (a *AnalyticsPolicy) OnResponseBodyChunk(_ context.Context, ctx *policy.Res
 
 	_, sendRespBody := getPayloadFlags(params)
 	if sendRespBody && len(accumulated) > 0 {
-		analyticsMetadata["response_payload"] = string(accumulated)
+		analyticsMetadata["response_payload"] = truncatePayload(accumulated, getMaxPayloadSize(params))
 	}
 
 	if len(analyticsMetadata) == 0 {
@@ -972,6 +972,41 @@ func serializeHeaders(headers *policy.Headers) string {
 		return ""
 	}
 	return string(data)
+}
+
+// getMaxPayloadSize reads the max_payload_size policy parameter (bytes). It
+// returns 0 when unset or non-positive, meaning "no limit".
+func getMaxPayloadSize(params map[string]interface{}) int {
+	if params == nil {
+		return 0
+	}
+	raw, ok := params["max_payload_size"]
+	if !ok {
+		return 0
+	}
+	switch v := raw.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	case string:
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+// truncatePayload returns up to maxSize bytes of body as a string. A maxSize of
+// 0 or less means no limit (the full body is returned). Truncation is on a byte
+// boundary and silent (no marker is appended).
+func truncatePayload(body []byte, maxSize int) string {
+	if maxSize > 0 && len(body) > maxSize {
+		return string(body[:maxSize])
+	}
+	return string(body)
 }
 
 // Helper to extract string values via JSONPath

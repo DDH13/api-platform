@@ -217,6 +217,16 @@ func TestInjectSystemPolicies_HeaderFlagsDefaultFalse(t *testing.T) {
 	assert.Equal(t, false, result[0].Parameters["send_response_headers"])
 }
 
+func TestInjectSystemPolicies_MaxPayloadSizePropagated(t *testing.T) {
+	cfg := &config.Config{
+		Analytics: config.AnalyticsConfig{Enabled: true, MaxPayloadSize: 4096},
+	}
+
+	result := InjectSystemPolicies(nil, cfg, nil)
+	assert.Len(t, result, 1)
+	assert.Equal(t, 4096, result[0].Parameters["max_payload_size"])
+}
+
 func TestInjectSystemPolicies_WithAdditionalProps(t *testing.T) {
 	cfg := &config.Config{
 		Analytics: config.AnalyticsConfig{
