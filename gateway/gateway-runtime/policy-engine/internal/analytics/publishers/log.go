@@ -40,7 +40,6 @@ const maskedHeaderValue = "****"
 // (when send_request_body/send_response_body are enabled) payloads attached by
 // the analytics engine, so this publisher only serializes it.
 type Log struct {
-	pretty bool
 	// maskedHeaders holds lower-cased header names whose values are redacted in
 	// the requestHeaders/responseHeaders properties before logging.
 	maskedHeaders map[string]bool
@@ -65,7 +64,6 @@ func NewLog(logCfg *config.LogPublisherConfig) *Log {
 	}
 
 	return &Log{
-		pretty:        logCfg.Pretty,
 		maskedHeaders: masked,
 		out:           os.Stdout,
 	}
@@ -79,15 +77,7 @@ func (l *Log) Publish(event *dto.Event) {
 
 	out := l.applyMasking(event)
 
-	var (
-		data []byte
-		err  error
-	)
-	if l.pretty {
-		data, err = json.MarshalIndent(out, "", "  ")
-	} else {
-		data, err = json.Marshal(out)
-	}
+	data, err := json.Marshal(out)
 	if err != nil {
 		slog.Error("Failed to marshal analytics event for log publisher", "error", err)
 		return

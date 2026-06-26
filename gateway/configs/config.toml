@@ -5,12 +5,27 @@ enabled = true
 # and when send_request_body/send_response_body are not explicitly set, both
 # request and response bodies will be included in analytics events.
 # allow_payloads = true
-send_request_body = false
-send_response_body = false
-enabled_publishers = ["moesif"]
+# Capture request/response payloads (bodies) into the events.
+send_request_body = true
+send_response_body = true
+# Truncate each captured body to this many bytes (0 = no limit).
+max_payload_size = 2048
+# Capture ALL request/response headers (redacted on output by masked_headers below).
+send_request_headers = true
+send_response_headers = true
+# Suppress analytics/log output entirely for requests whose path starts with any
+# of these prefixes (e.g. health probes).
+ignored_path_prefixes = ["/health", "/ready"]
+# "log" writes each analytics event to stdout as JSON (no external service needed).
+# Use ["moesif", "log"] to do both.
+enabled_publishers = ["log"]
 
-[analytics.publishers.moesif]
-application_id = "<MOESIF_APPLICATION_ID>"
+[analytics.publishers.log]
+# Header names (case-insensitive) whose values are redacted as "****".
+masked_headers = ["authorization"]
+
+# [analytics.publishers.moesif]
+# application_id = "<MOESIF_APPLICATION_ID>"
 
 [router]
 gateway_host = "*"
@@ -50,4 +65,121 @@ pricing_file = "/etc/policy-engine/llm-pricing/model_prices.json"
 [immutable_gateway]
 enabled = false
 artifacts_dir = "/etc/api-platform-gateway/immutable_gateway/artifacts"
+
+[policy_configurations.backendjwt_v1]
+algorithm = "SHA256withRSA"
+# algorithm = "NONE"
+# algorithm = "ES256"
+issuer = "https://gateway.local"
+tokenexpiry = "15m"
+tokencaching = true
+cachemaxsize = 1000    
+
+[policy_configurations.backendjwt_v1.signingkey]
+inline = """
+-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCpilDV57t6zg7H
+fJKOVdhLKR3DHpDO0q0+chermJLdNjH1O2mq6gPsWIWwaDp2G1pM+0Iu1vAOV+5r
+YEJc3S2MyJlws9WQTCTChDtC8d4dwL6JuWG5lxMV2tpJfjVaKhx7aBHBRLZdRhPb
+JKu08PjrwDbMdVDlM5BwWGMeaPelbSe5KBNExjEILX/GPLJXH0lLPDDLQCuYvHQ4
+3aIRG53AwEqbr5MbOGQ9qFiLmwOgHYE0ppE2uXFj+s4ehSsJLpIcQSE/kcVNqu/i
+9Pw5VyPc0PBh5S95wO9jltt+n5nj2p5W156XWCbIOb64dbM/G7Sdui3OFlbUnEgf
+lv++ylpZAgMBAAECggEADc52wMSrTtfi+jnZ0X+KKqzBgLdHgaBEfXZbGR1GsH8O
+WHMrKsD96sxWrsP+JsoZc3VusVPNns1oXBQts1RLtlBLtpLejG62+6Q7EzuRJAkj
+OyH+pFd6NWhqKFv/ykTtptsVvxBybWwch9cXqJeLHd+8VrAjE1c8pvl7sOlJaY40
+4AIAo119jRrvBDKZb9zNoBMFAjHBLUciqV7FWnECP2Z20HzWE6CvQ3Glp9KXa/Vd
+3l74XeugRtkHzZJDKrQOsT1tGTBNcUlG1BDxmykpNQGtYzgmQURmAOLmXpMUAMbV
+3aJlDm51CP13QzhqrPGhcz0TICb8JZ/hI6lGmvpxRQKBgQDsLaPFf/9yCpf/oogx
+JG2k66wYhA/83v7zrq2SfO+RWq+tOV54xoUiGc7UJVmgcxPF4YXj3ciqhOaWt1Sh
+47OUWVWLpnPjwaFjCc0NirvzPjYZcqOgpOyg8/bpQEyr9+mIB4nDToe/PaaLk/fN
+IKuDxZXDdQM4KEg410rmcbEzkwKBgQC3xPBwPUNqlocOf9H5VVCIjuxhITWuUPcd
+CC0l69aiUvCcSHq2DrpQkmr/E5is+IY25n11OzOJmEPRAzkiZxasWNwG3eHYEbwg
+PAbmF0gLoQI80k5j7cnuumj2usbizN3q4IkonZhbSculFEtYvidbox0PGpF/ohww
+f2Q2pRFF4wKBgHurZl9Lp+oCbBca92+sIJHEKkhoFqsV5bCaHh9ftl6JewYczUA2
+y43Qr8HckPL4bzkl32MzRhksIEZ5VyKyRd1/bdEDZxmy0Zw3jJzzsXkscU2f/thm
+o9WgCgGXfs5psWpecB/J5kEYujXKVG6gFc+ZTdOcWQQ166N/8KN8kwprAoGAO1QD
+Y9kDeNfcBlxRx7M5arzpp3n3QK22+dJ38PQwuPsZ3vqvUzNyBy0eCfejpMQfYH4N
+JtnUC6nyyvnFakvpz/5oGndrwDwJhkaa25HMmqSCemxTDoPoW4Am/vDR4MrPIlMX
+NNucImyyqDrjEGVjg3wnl4a2ToRhoW6fRd0ItI0CgYBV5Xulb5e44HCQvznKhloe
+Kie6EvbJrDion3udphv2gY69G+fh4eIJr7vtQZ+MP7Oyl0I20y6LeEvSKoGvg0AA
+knCmk/s1op+H/gojHTKLFVRd3Q2llOpX1VCiPD80PTvmcKR3ZWbUJGUfD5TXNyWc
+wbJ3Ujx/o5t1QEzMNZWLZg==
+-----END PRIVATE KEY-----
+"""
+
+# [policy_configurations.backendjwt_v1.signingkey]
+# inline = """
+# -----BEGIN EC PRIVATE KEY-----
+# MHcCAQEEIBkOWTBJYcga8EQGPANsL1cwaJ/C4hWBl3pJc5erHqR9oAoGCCqGSM49
+# AwEHoUQDQgAE4MJF0hGpq7Tnwb3QiCGGjSf7qs2rzLD4u1/WtZS7iREaPOFtmBi1
+# NYKeQ7vMbHXngjNoAvQUxLuNf+pGOPWSmw==
+# -----END EC PRIVATE KEY-----
+# """
+
+# [policy_configurations.backendjwt_v1.signingkey]
+# path = "/etc/gateway/keys/ecdsa_private.pem"
+
+[policy_configurations.jwtauth_v1]
+jwkscachettl = "5m"
+jwksfetchtimeout = "5s"
+jwksfetchretrycount = 3
+jwksfetchretryinterval = "2s"
+allowedalgorithms = ["RS256", "ES256"]
+leeway = "30s"
+authheaderscheme = "Bearer"
+headername = "Authorization"
+onfailurestatuscode = 401
+errormessageformat = "json"
+errormessage = "Authentication failed"
+validateissuer = true
+
+[[policy_configurations.jwtauth_v1.keymanagers]]
+issuer = "https://api.asgardeo.io/t/dinethwso2/oauth2/token"
+name = "test"
+
+[policy_configurations.jwtauth_v1.keymanagers.jwks.remote]
+uri = "https://api.asgardeo.io/t/dinethwso2/oauth2/jwks"
+skipTlsVerify = false
+
+[policy_configurations.opaquetokenauth_v1]
+introspectioncachettl = "60s"
+introspectionnegativecachettl = "30s"
+introspectiontimeout = "5s"
+introspectionretrycount = 2
+introspectionretryinterval = "1s"
+leeway = "10s"
+authheaderscheme = "Bearer"
+headername = "Authorization"
+onfailurestatuscode = 401
+errormessageformat = "json"
+errormessage = "Authentication failed"
+
+[[policy_configurations.opaquetokenauth_v1.introspectionproviders]]
+name = "local_app"
+issuer = "http://host.docker.internal:3000/oauth2/token"
+tokenPattern = "opaque.*"
+
+[policy_configurations.opaquetokenauth_v1.introspectionproviders.introspection]
+uri = "http://host.docker.internal:3000/oauth2/introspect"
+# Client credentials the gateway uses to authenticate to the introspection
+# endpoint (RFC 7662 requires the protected resource to authenticate). Replace
+# with a client authorized to introspect tokens on this Asgardeo tenant.
+clientId = "test-client"
+clientSecret = "test-secret"
+authStyle = "basic"
+tokenTypeHint = "access_token"
+skipTlsVerify = false
+
+[[policy_configurations.opaquetokenauth_v1.introspectionproviders]]
+name = "asgardeo_app"
+issuer = "https://api.asgardeo.io/t/dinethwso2/oauth2/token"
+tokenpattern = "fd"
+
+[policy_configurations.opaquetokenauth_v1.introspectionproviders.introspection]
+uri = "https://api.asgardeo.io/t/dinethwso2/oauth2/introspect"
+clientId = "PfHXs0tbGmfp7lvjyrnO6o8ViCIa"
+clientSecret = "NsvBsvF9FfcTvpolXLjYJtW_FYzVnFhVBA7QAeIdr_ka"
+authStyle = "basic"
+tokenTypeHint = "access_token"
+skipTlsVerify = false
 
