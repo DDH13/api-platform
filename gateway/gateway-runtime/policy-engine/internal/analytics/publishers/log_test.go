@@ -51,7 +51,6 @@ func newLogToFile(t *testing.T, cfg *config.LogPublisherConfig) (*Log, func() st
 func TestNewLog_NilConfig(t *testing.T) {
 	l := NewLog(nil)
 	require.NotNil(t, l)
-	assert.False(t, l.pretty)
 	assert.Empty(t, l.maskedHeaders)
 }
 
@@ -107,17 +106,6 @@ func TestLog_Publish_DoesNotMutateSharedEvent(t *testing.T) {
 
 	// The shared event (read by other publishers) must be untouched.
 	assert.Equal(t, original, event.Properties["requestHeaders"])
-}
-
-func TestLog_Publish_Pretty(t *testing.T) {
-	l, read := newLogToFile(t, &config.LogPublisherConfig{Pretty: true})
-	l.Publish(createBaseEvent())
-
-	out := read()
-	assert.Contains(t, out, "\n  ") // indented
-	// Still valid JSON.
-	var decoded map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(out), &decoded))
 }
 
 func TestLog_Publish_NilEvent(t *testing.T) {

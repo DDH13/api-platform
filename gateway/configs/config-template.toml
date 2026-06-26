@@ -325,8 +325,6 @@ timer_wakeup_seconds = 3
 # metadata, plus request/response headers and — when send_request_body/
 # send_response_body are enabled — payloads) is written to stdout as JSON.
 [analytics.publishers.log]
-# pretty = true emits indented JSON instead of a single line per event.
-pretty = false
 # Header names (case-insensitive) whose values are redacted as "****" in the
 # logged requestHeaders/responseHeaders.
 masked_headers = ["authorization"]

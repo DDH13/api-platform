@@ -78,8 +78,6 @@ type AnalyticsPublishersConfig struct {
 // LogPublisherConfig holds configuration for the stdout/log analytics publisher,
 // which writes each analytics event to stdout as a JSON line.
 type LogPublisherConfig struct {
-	// Pretty pretty-prints the JSON event instead of emitting a single line.
-	Pretty bool `koanf:"pretty"`
 	// MaskedHeaders lists header names (case-insensitive) whose values are
 	// redacted in the logged requestHeaders/responseHeaders.
 	MaskedHeaders []string `koanf:"masked_headers"`
@@ -378,7 +376,6 @@ func defaultConfig() *Config {
 					TimerWakeupSeconds: 3,
 				},
 				Log: LogPublisherConfig{
-					Pretty:        false,
 					MaskedHeaders: []string{},
 				},
 			},
