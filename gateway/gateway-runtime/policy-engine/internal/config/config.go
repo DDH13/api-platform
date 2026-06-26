@@ -68,6 +68,17 @@ type AnalyticsConfig struct {
 // AnalyticsPublishersConfig holds configuration for all analytics publishers
 type AnalyticsPublishersConfig struct {
 	Moesif MoesifPublisherConfig `koanf:"moesif"`
+	Log    LogPublisherConfig    `koanf:"log"`
+}
+
+// LogPublisherConfig holds configuration for the stdout/log analytics publisher,
+// which writes each analytics event to stdout as a JSON line.
+type LogPublisherConfig struct {
+	// Pretty pretty-prints the JSON event instead of emitting a single line.
+	Pretty bool `koanf:"pretty"`
+	// MaskedHeaders lists header names (case-insensitive) whose values are
+	// redacted in the logged requestHeaders/responseHeaders.
+	MaskedHeaders []string `koanf:"masked_headers"`
 }
 
 // MoesifPublisherConfig holds Moesif-specific configuration
@@ -362,6 +373,10 @@ func defaultConfig() *Config {
 					BatchSize:          50,
 					TimerWakeupSeconds: 3,
 				},
+				Log: LogPublisherConfig{
+					Pretty:        false,
+					MaskedHeaders: []string{},
+				},
 			},
 			GRPCEventServerCfg: map[string]interface{}{
 				"server_port":           18090,
@@ -595,6 +610,8 @@ func (c *Config) validateAnalyticsConfig() error {
 						return fmt.Errorf("analytics.publishers.moesif.moesif_base_url must be a valid URL (e.g. https://api.moesif.net), got %q", moesifCfg.BaseURL)
 					}
 				}
+			case "log":
+				// The stdout/log publisher has no required configuration.
 			default:
 				return fmt.Errorf("unknown publisher type in enabled_publishers: %s", publisherName)
 			}

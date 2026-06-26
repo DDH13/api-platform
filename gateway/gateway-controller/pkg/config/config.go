@@ -73,6 +73,12 @@ type AnalyticsConfig struct {
 	AllowPayloads    bool `koanf:"allow_payloads"`
 	SendRequestBody  bool `koanf:"send_request_body"`
 	SendResponseBody bool `koanf:"send_response_body"`
+	// SendRequestHeaders / SendResponseHeaders, when true, make the analytics
+	// system policy capture ALL request / response headers into analytics
+	// metadata (request_headers / response_headers), so every API's headers
+	// flow into analytics events without attaching a per-API header policy.
+	SendRequestHeaders  bool `koanf:"send_request_headers"`
+	SendResponseHeaders bool `koanf:"send_response_headers"`
 }
 
 // SubscriptionsConfig holds configuration for application-level subscriptions.
@@ -922,9 +928,11 @@ func defaultConfig() *Config {
 				MaxMessageSize:      1000000000,
 				MaxHeaderLimit:      8192,
 			},
-			AllowPayloads:    false,
-			SendRequestBody:  false,
-			SendResponseBody: false,
+			AllowPayloads:       false,
+			SendRequestBody:     false,
+			SendResponseBody:    false,
+			SendRequestHeaders:  false,
+			SendResponseHeaders: false,
 		},
 		TracingConfig: TracingConfig{
 			Enabled:        false,

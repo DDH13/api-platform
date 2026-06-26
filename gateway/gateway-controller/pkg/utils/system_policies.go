@@ -89,8 +89,10 @@ var defaultSystemPolicies = []systemPolicyConfig{
 		},
 		// Default parameters (can be overridden via additionalProps)
 		Parameters: map[string]interface{}{
-			"send_request_body":  false,
-			"send_response_body": false,
+			"send_request_body":     false,
+			"send_response_body":    false,
+			"send_request_headers":  false,
+			"send_response_headers": false,
 		},
 		ExecutionCondition: nil,
 	},
@@ -197,10 +199,13 @@ func InjectSystemPolicies(policies []policyenginev1.PolicyInstance, cfg *config.
 			for k, v := range sysPol.Parameters {
 				effectiveDefaults[k] = v
 			}
-			// For the analytics system policy, propagate the payload flags from runtime config.
+			// For the analytics system policy, propagate the payload and header
+			// capture flags from runtime config.
 			if sysPol.Name == constants.ANALYTICS_SYSTEM_POLICY_NAME {
 				effectiveDefaults["send_request_body"] = cfg.Analytics.SendRequestBody
 				effectiveDefaults["send_response_body"] = cfg.Analytics.SendResponseBody
+				effectiveDefaults["send_request_headers"] = cfg.Analytics.SendRequestHeaders
+				effectiveDefaults["send_response_headers"] = cfg.Analytics.SendResponseHeaders
 			}
 
 			// Merge parameters efficiently

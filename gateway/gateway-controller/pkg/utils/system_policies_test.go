@@ -190,6 +190,33 @@ func TestInjectSystemPolicies_AllowPayloadsFalse(t *testing.T) {
 	assert.Equal(t, false, result[0].Parameters["send_response_body"])
 }
 
+func TestInjectSystemPolicies_HeaderFlagsPropagated(t *testing.T) {
+	cfg := &config.Config{
+		Analytics: config.AnalyticsConfig{
+			Enabled:             true,
+			SendRequestHeaders:  true,
+			SendResponseHeaders: true,
+		},
+	}
+
+	result := InjectSystemPolicies(nil, cfg, nil)
+	assert.Len(t, result, 1)
+	assert.Equal(t, constants.ANALYTICS_SYSTEM_POLICY_NAME, result[0].Name)
+	assert.Equal(t, true, result[0].Parameters["send_request_headers"])
+	assert.Equal(t, true, result[0].Parameters["send_response_headers"])
+}
+
+func TestInjectSystemPolicies_HeaderFlagsDefaultFalse(t *testing.T) {
+	cfg := &config.Config{
+		Analytics: config.AnalyticsConfig{Enabled: true},
+	}
+
+	result := InjectSystemPolicies(nil, cfg, nil)
+	assert.Len(t, result, 1)
+	assert.Equal(t, false, result[0].Parameters["send_request_headers"])
+	assert.Equal(t, false, result[0].Parameters["send_response_headers"])
+}
+
 func TestInjectSystemPolicies_WithAdditionalProps(t *testing.T) {
 	cfg := &config.Config{
 		Analytics: config.AnalyticsConfig{
