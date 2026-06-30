@@ -49,10 +49,10 @@ type Log struct {
 	out *os.File
 }
 
-// NewLog creates a new stdout log publisher.
-func NewLog(logCfg *config.LogPublisherConfig) *Log {
+// NewLog creates a new stdout traffic-logging publisher.
+func NewLog(logCfg *config.TrafficLoggingConfig) *Log {
 	if logCfg == nil {
-		logCfg = &config.LogPublisherConfig{}
+		logCfg = &config.TrafficLoggingConfig{}
 	}
 
 	masked := make(map[string]bool, len(logCfg.MaskedHeaders))

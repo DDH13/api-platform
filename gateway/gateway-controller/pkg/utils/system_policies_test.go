@@ -124,9 +124,9 @@ func TestInjectSystemPolicies_NilConfig(t *testing.T) {
 	assert.Equal(t, policies, result)
 }
 
-func TestInjectSystemPolicies_AnalyticsDisabled(t *testing.T) {
+func TestInjectSystemPolicies_CollectorDisabled(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			Enabled: false,
 		},
 	}
@@ -139,9 +139,9 @@ func TestInjectSystemPolicies_AnalyticsDisabled(t *testing.T) {
 	assert.Equal(t, "existing", result[0].Name)
 }
 
-func TestInjectSystemPolicies_AnalyticsEnabled(t *testing.T) {
+func TestInjectSystemPolicies_CollectorEnabled(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			Enabled: true,
 		},
 	}
@@ -159,11 +159,11 @@ func TestInjectSystemPolicies_AnalyticsEnabled(t *testing.T) {
 	assert.Equal(t, "existing", result[1].Name)
 }
 
-func TestInjectSystemPolicies_AllowPayloadsTrue(t *testing.T) {
+func TestInjectSystemPolicies_BodyFlagsPropagated(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
-			Enabled:         true,
-			SendRequestBody: true,
+		Collector: config.CollectorConfig{
+			Enabled:          true,
+			SendRequestBody:  true,
 			SendResponseBody: true,
 		},
 	}
@@ -175,11 +175,11 @@ func TestInjectSystemPolicies_AllowPayloadsTrue(t *testing.T) {
 	assert.Equal(t, true, result[0].Parameters["send_response_body"])
 }
 
-func TestInjectSystemPolicies_AllowPayloadsFalse(t *testing.T) {
+func TestInjectSystemPolicies_BodyFlagsDefaultFalse(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
-			Enabled:         true,
-			SendRequestBody: false,
+		Collector: config.CollectorConfig{
+			Enabled:          true,
+			SendRequestBody:  false,
 			SendResponseBody: false,
 		},
 	}
@@ -192,7 +192,7 @@ func TestInjectSystemPolicies_AllowPayloadsFalse(t *testing.T) {
 
 func TestInjectSystemPolicies_HeaderFlagsPropagated(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			Enabled:             true,
 			SendRequestHeaders:  true,
 			SendResponseHeaders: true,
@@ -208,7 +208,7 @@ func TestInjectSystemPolicies_HeaderFlagsPropagated(t *testing.T) {
 
 func TestInjectSystemPolicies_HeaderFlagsDefaultFalse(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{Enabled: true},
+		Collector: config.CollectorConfig{Enabled: true},
 	}
 
 	result := InjectSystemPolicies(nil, cfg, nil)
@@ -219,7 +219,7 @@ func TestInjectSystemPolicies_HeaderFlagsDefaultFalse(t *testing.T) {
 
 func TestInjectSystemPolicies_MaxPayloadSizePropagated(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{Enabled: true, MaxPayloadSize: 4096},
+		Collector: config.CollectorConfig{Enabled: true, MaxPayloadSize: 4096},
 	}
 
 	result := InjectSystemPolicies(nil, cfg, nil)
@@ -229,7 +229,7 @@ func TestInjectSystemPolicies_MaxPayloadSizePropagated(t *testing.T) {
 
 func TestInjectSystemPolicies_WithAdditionalProps(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			Enabled: true,
 		},
 	}
@@ -246,7 +246,7 @@ func TestInjectSystemPolicies_WithAdditionalProps(t *testing.T) {
 
 func TestInjectSystemPolicies_WithSharedParams(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			Enabled: true,
 		},
 	}
@@ -263,7 +263,7 @@ func TestInjectSystemPolicies_WithSharedParams(t *testing.T) {
 
 func TestInjectSystemPolicies_EmptyPolicies(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			Enabled: true,
 		},
 	}
@@ -275,7 +275,7 @@ func TestInjectSystemPolicies_EmptyPolicies(t *testing.T) {
 
 func TestInjectSystemPolicies_PreservesExistingPolicies(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			Enabled: true,
 		},
 	}

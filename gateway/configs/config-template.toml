@@ -281,55 +281,35 @@ port = 9010
 host = "localhost"
 
 # =============================================================================
-# ANALYTICS CONFIGURATION
+# COLLECTOR CONFIGURATION
 # =============================================================================
-[analytics]
+# The collector is the shared data-capture pipeline: it injects the analytics
+# system policy and ships request/response headers and bodies to the policy-engine
+# over ALS. It is a PREREQUISITE for every consumer below — analytics and
+# traffic_logging both require collector.enabled = true (enabling a consumer with
+# the collector off is a startup error).
+[collector]
 enabled = false
-# Deprecated: allow_payloads is preserved for backward compatibility. When true
-# and both send_request_body and send_response_body are false, both directions
-# are enabled (bool fields cannot distinguish "unset" from explicitly false).
-# To disable payloads entirely, set allow_payloads = false or remove it; do not
-# rely on send_*_body = false while allow_payloads remains true.
-allow_payloads = false
+# Capture request/response payloads (bodies) into the collected event.
 send_request_body = false
 send_response_body = false
 # Max bytes captured per request/response body when send_*_body is enabled.
 # 0 = no limit; a positive value truncates each body to that many bytes.
 max_payload_size = 0
-# Capture ALL request/response headers into analytics events (request_headers/
-# response_headers). Applies to every API via the analytics system policy, so no
-# per-API header policy is needed. Sensitive values are redacted on output by the
-# log publisher's masked_headers setting.
+# Capture ALL request/response headers into the collected event (request_headers/
+# response_headers). Applies to every API via the collector system policy, so no
+# per-API header policy is needed. Sensitive values are redacted on output by each
+# consumer (e.g. traffic_logging.masked_headers).
 send_request_headers = false
 send_response_headers = false
-# Suppress analytics events (and therefore all publisher output, including the
-# stdout/log publisher) for requests whose original path starts with any of these
-# prefixes. Useful for excluding health/readiness probes. Matching uses the
-# client-facing (pre-rewrite) path.
+# Suppress collection (and therefore all consumer output) for requests whose
+# original path starts with any of these prefixes. Useful for excluding
+# health/readiness probes. Matching uses the client-facing (pre-rewrite) path.
 ignored_path_prefixes = []
-# Publishers that receive analytics events. Supported: "moesif" (sends to the
-# Moesif SaaS) and "log" (writes each enriched event to stdout as JSON — useful
-# for log-scraping pipelines such as Fluent Bit/Loki/ELK). Multiple publishers
-# can be enabled together, e.g. ["moesif", "log"].
-enabled_publishers = ["moesif"]
 
-[analytics.publishers.moesif]
-application_id = "<MOESIF_APPLICATION_ID>"
-moesif_base_url = "https://api.moesif.net"
-publish_interval = 5
-event_queue_size = 10000
-batch_size = 50
-timer_wakeup_seconds = 3
-
-# Stdout/log publisher. Each analytics event (rich API/application/AI/latency
-# metadata, plus request/response headers and — when send_request_body/
-# send_response_body are enabled — payloads) is written to stdout as JSON.
-[analytics.publishers.log]
-# Header names (case-insensitive) whose values are redacted as "****" in the
-# logged requestHeaders/responseHeaders.
-masked_headers = ["authorization"]
-
-[analytics.grpc_event_server]
+# ALS transport tuning (advanced; defaults are sensible). Read by the
+# gateway-controller to configure Envoy's gRPC access-log sink.
+[collector.grpc_event_server]
 buffer_flush_interval = 1000000000
 buffer_size_bytes = 16384
 grpc_request_timeout = 20000000000
@@ -340,6 +320,53 @@ private_key_path = ""
 als_plain_text = true
 max_message_size = 1000000000
 max_header_limit = 8192
+
+# ALS receiver tuning (advanced; defaults are sensible). Read by the policy-engine
+# to configure the gRPC server that ingests access logs.
+[collector.access_logs_service]
+mode = "uds"                       # "uds" (default) or "tcp"
+server_port = 18090                # used in tcp mode
+shutdown_timeout = "600s"
+als_plain_text = true
+max_message_size = 1000000000
+max_header_limit = 8192
+
+# =============================================================================
+# ANALYTICS CONFIGURATION (consumer — requires [collector].enabled = true)
+# =============================================================================
+[analytics]
+enabled = false
+# Deprecated: allow_payloads / send_request_body / send_response_body are preserved
+# for backward compatibility and are mapped onto the [collector] body-capture flags
+# during validation (with a warning). Prefer setting [collector] directly.
+allow_payloads = false
+# send_request_body = false
+# send_response_body = false
+# Publishers that receive analytics events. Supported: "moesif" (sends to the
+# Moesif SaaS). For stdout JSON logging use [traffic_logging] instead of a "log"
+# publisher here.
+enabled_publishers = ["moesif"]
+
+[analytics.publishers.moesif]
+application_id = "<MOESIF_APPLICATION_ID>"
+moesif_base_url = "https://api.moesif.net"
+publish_interval = 5
+event_queue_size = 10000
+batch_size = 50
+timer_wakeup_seconds = 3
+
+# =============================================================================
+# TRAFFIC LOGGING (consumer — requires [collector].enabled = true)
+# =============================================================================
+# Writes each collected event (rich API/application/AI/latency metadata, plus
+# request/response headers and — when the collector's send_*_body is enabled —
+# payloads) to stdout as a JSON line. Useful for log-scraping pipelines such as
+# Fluent Bit/Loki/ELK; no external SaaS needed.
+[traffic_logging]
+enabled = false
+# Header names (case-insensitive) whose values are redacted as "****" in the
+# logged requestHeaders/responseHeaders.
+masked_headers = ["authorization"]
 
 # =============================================================================
 # POLICY CONFIGURATIONS

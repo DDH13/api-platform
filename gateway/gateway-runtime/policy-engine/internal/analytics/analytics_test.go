@@ -64,7 +64,9 @@ func validAnalyticsConfigForValidation(analytics config.AnalyticsConfig) *config
 		Analytics: analytics,
 	}
 	cfg.Analytics.Enabled = true
-	cfg.Analytics.AccessLogsServiceCfg = config.AccessLogsServiceConfig{
+	// Analytics is a consumer; the collector must be enabled for it to validate.
+	cfg.Collector.Enabled = true
+	cfg.Collector.AccessLogsServiceCfg = config.AccessLogsServiceConfig{
 		Mode:                  "uds",
 		ShutdownTimeout:       600 * time.Second,
 		ExtProcMaxMessageSize: 1000000,
@@ -138,7 +140,21 @@ func TestNewAnalytics_EnabledWithUnknownPublisherType(t *testing.T) {
 	assert.Empty(t, analytics.publishers) // Unknown type should not be added
 }
 
-func TestNewAnalytics_EnabledWithLogPublisher(t *testing.T) {
+func TestNewAnalytics_TrafficLoggingEnabled(t *testing.T) {
+	// Traffic logging is a standalone consumer, independent of analytics.
+	cfg := &config.Config{
+		TrafficLogging: config.TrafficLoggingConfig{Enabled: true},
+	}
+
+	analytics := NewAnalytics(cfg)
+
+	require.NotNil(t, analytics)
+	assert.Len(t, analytics.publishers, 1) // traffic-logging publisher should be registered
+}
+
+func TestNewAnalytics_LogInEnabledPublishersIgnored(t *testing.T) {
+	// "log" in analytics.enabled_publishers is no longer supported; it must not
+	// register a publisher (use [traffic_logging] instead).
 	cfg := &config.Config{
 		Analytics: config.AnalyticsConfig{
 			Enabled:           true,
@@ -149,7 +165,7 @@ func TestNewAnalytics_EnabledWithLogPublisher(t *testing.T) {
 	analytics := NewAnalytics(cfg)
 
 	require.NotNil(t, analytics)
-	assert.Len(t, analytics.publishers, 1) // log publisher should be registered
+	assert.Empty(t, analytics.publishers)
 }
 
 // =============================================================================
@@ -269,7 +285,7 @@ func TestProcess_WithMockPublisher(t *testing.T) {
 
 func TestIsPathIgnored(t *testing.T) {
 	a := NewAnalytics(&config.Config{
-		Analytics: config.AnalyticsConfig{IgnoredPathPrefixes: []string{"/health", "/ready"}},
+		Collector: config.CollectorConfig{IgnoredPathPrefixes: []string{"/health", "/ready"}},
 	})
 
 	mk := func(orig, path string) *v3.HTTPAccessLogEntry {
@@ -291,7 +307,7 @@ func TestIsPathIgnored_NoPrefixesConfigured(t *testing.T) {
 
 func TestProcess_SkipsIgnoredPath(t *testing.T) {
 	analytics := NewAnalytics(&config.Config{
-		Analytics: config.AnalyticsConfig{IgnoredPathPrefixes: []string{"/health"}},
+		Collector: config.CollectorConfig{IgnoredPathPrefixes: []string{"/health"}},
 	})
 	mockPub := &mockPublisher{}
 	analytics.publishers = append(analytics.publishers, mockPub)
@@ -307,7 +323,7 @@ func TestProcess_SkipsIgnoredPath(t *testing.T) {
 
 func TestProcess_PublishesNonIgnoredPath(t *testing.T) {
 	analytics := NewAnalytics(&config.Config{
-		Analytics: config.AnalyticsConfig{IgnoredPathPrefixes: []string{"/health"}},
+		Collector: config.CollectorConfig{IgnoredPathPrefixes: []string{"/health"}},
 	})
 	mockPub := &mockPublisher{}
 	analytics.publishers = append(analytics.publishers, mockPub)
@@ -593,7 +609,7 @@ func TestPrepareAnalyticEvent_WithRequestResponseHeaders(t *testing.T) {
 
 func TestPrepareAnalyticEvent_WithPayloadsEnabled(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			SendRequestBody:  true,
 			SendResponseBody: true,
 		},
@@ -619,7 +635,7 @@ func TestPrepareAnalyticEvent_WithPayloadsEnabled(t *testing.T) {
 
 func TestPrepareAnalyticEvent_WithPayloadsDisabled(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			SendRequestBody:  false,
 			SendResponseBody: false,
 		},
@@ -642,7 +658,7 @@ func TestPrepareAnalyticEvent_WithPayloadsDisabled(t *testing.T) {
 
 func TestPrepareAnalyticEvent_RequestPayloadOnly(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			SendRequestBody:  true,
 			SendResponseBody: false,
 		},
@@ -666,7 +682,7 @@ func TestPrepareAnalyticEvent_RequestPayloadOnly(t *testing.T) {
 
 func TestPrepareAnalyticEvent_ResponsePayloadOnly(t *testing.T) {
 	cfg := &config.Config{
-		Analytics: config.AnalyticsConfig{
+		Collector: config.CollectorConfig{
 			SendRequestBody:  false,
 			SendResponseBody: true,
 		},

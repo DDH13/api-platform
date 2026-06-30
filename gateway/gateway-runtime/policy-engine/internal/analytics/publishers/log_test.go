@@ -31,7 +31,7 @@ import (
 
 // newLogToFile builds a Log publisher that writes to a temp file, returning the
 // publisher and a function that reads back what was written.
-func newLogToFile(t *testing.T, cfg *config.LogPublisherConfig) (*Log, func() string) {
+func newLogToFile(t *testing.T, cfg *config.TrafficLoggingConfig) (*Log, func() string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "out.log")
 	f, err := os.Create(path)
@@ -55,7 +55,7 @@ func TestNewLog_NilConfig(t *testing.T) {
 }
 
 func TestLog_Publish_WritesJSONLine(t *testing.T) {
-	l, read := newLogToFile(t, &config.LogPublisherConfig{})
+	l, read := newLogToFile(t, &config.TrafficLoggingConfig{})
 	event := createBaseEvent()
 	event.Properties["requestHeaders"] = `{"x-foo":"bar"}`
 
@@ -74,7 +74,7 @@ func TestLog_Publish_WritesJSONLine(t *testing.T) {
 }
 
 func TestLog_Publish_MasksHeaders(t *testing.T) {
-	l, read := newLogToFile(t, &config.LogPublisherConfig{MaskedHeaders: []string{"Authorization"}})
+	l, read := newLogToFile(t, &config.TrafficLoggingConfig{MaskedHeaders: []string{"Authorization"}})
 	event := createBaseEvent()
 	event.Properties["requestHeaders"] = `{"Authorization":"Bearer secret","x-foo":"bar"}`
 	event.Properties["responseHeaders"] = `{"authorization":"Bearer secret2"}`
@@ -97,7 +97,7 @@ func TestLog_Publish_MasksHeaders(t *testing.T) {
 }
 
 func TestLog_Publish_DoesNotMutateSharedEvent(t *testing.T) {
-	l, _ := newLogToFile(t, &config.LogPublisherConfig{MaskedHeaders: []string{"authorization"}})
+	l, _ := newLogToFile(t, &config.TrafficLoggingConfig{MaskedHeaders: []string{"authorization"}})
 	event := createBaseEvent()
 	original := `{"authorization":"Bearer secret"}`
 	event.Properties["requestHeaders"] = original
@@ -109,13 +109,13 @@ func TestLog_Publish_DoesNotMutateSharedEvent(t *testing.T) {
 }
 
 func TestLog_Publish_NilEvent(t *testing.T) {
-	l, read := newLogToFile(t, &config.LogPublisherConfig{})
+	l, read := newLogToFile(t, &config.TrafficLoggingConfig{})
 	assert.NotPanics(t, func() { l.Publish(nil) })
 	assert.Empty(t, read())
 }
 
 func TestLog_Publish_InvalidHeaderJSONLeftAsIs(t *testing.T) {
-	l, read := newLogToFile(t, &config.LogPublisherConfig{MaskedHeaders: []string{"authorization"}})
+	l, read := newLogToFile(t, &config.TrafficLoggingConfig{MaskedHeaders: []string{"authorization"}})
 	event := createBaseEvent()
 	event.Properties["requestHeaders"] = "not-json"
 

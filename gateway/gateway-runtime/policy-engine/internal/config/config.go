@@ -42,42 +42,64 @@ type Config struct {
 	PolicyEngine         PolicyEngine           `koanf:"policy_engine"`
 	GatewayController    map[string]interface{} `koanf:"gateway_controller"`
 	PolicyConfigurations map[string]interface{} `koanf:"policy_configurations"`
+	Collector            CollectorConfig        `koanf:"collector"`
 	Analytics            AnalyticsConfig        `koanf:"analytics"`
+	TrafficLogging       TrafficLoggingConfig   `koanf:"traffic_logging"`
 	TracingConfig        TracingConfig          `koanf:"tracing"`
+}
+
+// CollectorConfig holds the data-collection ("collector") configuration. The
+// collector is the shared capture pipeline that gathers request/response headers
+// and bodies and ships them to the policy-engine over ALS. It is a prerequisite
+// for every consumer of that data — analytics and traffic logging both require
+// collector.enabled to be true.
+type CollectorConfig struct {
+	// Enabled turns the collector on. When false, the ALS server is not started
+	// and no events are produced for any consumer.
+	Enabled bool `koanf:"enabled"`
+	// SendRequestBody / SendResponseBody attach captured request/response bodies
+	// onto the collected event.
+	SendRequestBody  bool `koanf:"send_request_body"`
+	SendResponseBody bool `koanf:"send_response_body"`
+	// IgnoredPathPrefixes suppresses collection (and therefore all consumer
+	// output) for requests whose original path starts with any of these prefixes,
+	// e.g. health-check probes.
+	IgnoredPathPrefixes []string `koanf:"ignored_path_prefixes"`
+	// AccessLogsServiceCfg tunes the policy-engine ALS receiver (the gRPC server
+	// that ingests collected access logs). It is part of the collector transport.
+	AccessLogsServiceCfg AccessLogsServiceConfig `koanf:"access_logs_service"`
 }
 
 // AnalyticsConfig holds analytics configuration
 type AnalyticsConfig struct {
-	Enabled              bool                      `koanf:"enabled"`
-	EnabledPublishers    []string                  `koanf:"enabled_publishers"`
-	Publishers           AnalyticsPublishersConfig `koanf:"publishers"`
-	GRPCEventServerCfg   map[string]interface{}    `koanf:"grpc_event_server"`
-	AccessLogsServiceCfg AccessLogsServiceConfig   `koanf:"access_logs_service"`
-	// AllowPayloads controls whether request and response bodies are captured
-	// into analytics metadata and forwarded to analytics publishers.
-	// Deprecated: use SendRequestBody and SendResponseBody instead.
-	// When true, validateAnalyticsConfig maps both SendRequestBody and SendResponseBody
-	// to true if both are false. Because bools cannot represent "unset", this also
-	// applies when both new flags are explicitly false; remove allow_payloads when
-	// migrating and set the directional flags directly.
+	Enabled            bool                      `koanf:"enabled"`
+	EnabledPublishers  []string                  `koanf:"enabled_publishers"`
+	Publishers         AnalyticsPublishersConfig `koanf:"publishers"`
+	GRPCEventServerCfg map[string]interface{}    `koanf:"grpc_event_server"`
+	// AccessLogsServiceCfg is a deprecated alias. ALS receiver tuning moved to
+	// [collector].access_logs_service; when set here it is migrated onto the
+	// collector during validation (with a warning). Prefer [collector].
+	AccessLogsServiceCfg AccessLogsServiceConfig `koanf:"access_logs_service"`
+	// AllowPayloads, SendRequestBody and SendResponseBody are deprecated aliases.
+	// Body capture now lives under [collector]. When set, these are mapped onto
+	// collector.send_request_body / collector.send_response_body during validation
+	// (with a warning). Prefer the [collector] fields directly.
 	AllowPayloads    bool `koanf:"allow_payloads"`
 	SendRequestBody  bool `koanf:"send_request_body"`
 	SendResponseBody bool `koanf:"send_response_body"`
-	// IgnoredPathPrefixes suppresses analytics events (and therefore all
-	// publisher output, including the stdout/log publisher) for requests whose
-	// original path starts with any of these prefixes, e.g. health-check probes.
-	IgnoredPathPrefixes []string `koanf:"ignored_path_prefixes"`
 }
 
 // AnalyticsPublishersConfig holds configuration for all analytics publishers
 type AnalyticsPublishersConfig struct {
 	Moesif MoesifPublisherConfig `koanf:"moesif"`
-	Log    LogPublisherConfig    `koanf:"log"`
 }
 
-// LogPublisherConfig holds configuration for the stdout/log analytics publisher,
-// which writes each analytics event to stdout as a JSON line.
-type LogPublisherConfig struct {
+// TrafficLoggingConfig holds configuration for the stdout traffic-logging feature,
+// which writes each collected event to stdout as a JSON line. It is a consumer of
+// the collector and requires collector.enabled to be true.
+type TrafficLoggingConfig struct {
+	// Enabled turns stdout JSON traffic logging on.
+	Enabled bool `koanf:"enabled"`
 	// MaskedHeaders lists header names (case-insensitive) whose values are
 	// redacted in the logged requestHeaders/responseHeaders.
 	MaskedHeaders []string `koanf:"masked_headers"`
@@ -317,6 +339,22 @@ func Load(configPath string) (*Config, error) {
 	return cfg, nil
 }
 
+// defaultAccessLogsServiceConfig returns the default policy-engine ALS receiver tuning.
+// Shared by the collector (canonical) and the deprecated [analytics].access_logs_service
+// alias so a partial alias override migrates cleanly.
+func defaultAccessLogsServiceConfig() AccessLogsServiceConfig {
+	return AccessLogsServiceConfig{
+		Mode:                  "",
+		ServerPort:            18090,
+		ShutdownTimeout:       600 * time.Second,
+		PublicKeyPath:         "",
+		PrivateKeyPath:        "",
+		ALSPlainText:          true,
+		ExtProcMaxMessageSize: 1000000000,
+		ExtProcMaxHeaderLimit: 8192,
+	}
+}
+
 // defaultConfig returns a Config struct with default configuration values
 func defaultConfig() *Config {
 	return &Config{
@@ -363,6 +401,17 @@ func defaultConfig() *Config {
 			},
 			TracingServiceName: "policy-engine",
 		},
+		Collector: CollectorConfig{
+			Enabled:              false,
+			SendRequestBody:      false,
+			SendResponseBody:     false,
+			IgnoredPathPrefixes:  []string{},
+			AccessLogsServiceCfg: defaultAccessLogsServiceConfig(),
+		},
+		TrafficLogging: TrafficLoggingConfig{
+			Enabled:       false,
+			MaskedHeaders: []string{},
+		},
 		Analytics: AnalyticsConfig{
 			Enabled:           false,
 			EnabledPublishers: []string{"moesif"},
@@ -375,9 +424,6 @@ func defaultConfig() *Config {
 					BatchSize:          50,
 					TimerWakeupSeconds: 3,
 				},
-				Log: LogPublisherConfig{
-					MaskedHeaders: []string{},
-				},
 			},
 			GRPCEventServerCfg: map[string]interface{}{
 				"server_port":           18090,
@@ -385,20 +431,12 @@ func defaultConfig() *Config {
 				"buffer_size_bytes":     16384,
 				"grpc_request_timeout":  20000000000,
 			},
-			AccessLogsServiceCfg: AccessLogsServiceConfig{
-				Mode:                  "",
-				ServerPort:            18090,
-				ShutdownTimeout:       600 * time.Second,
-				PublicKeyPath:         "",
-				PrivateKeyPath:        "",
-				ALSPlainText:          true,
-				ExtProcMaxMessageSize: 1000000000,
-				ExtProcMaxHeaderLimit: 8192,
-			},
-			AllowPayloads:       false,
-			SendRequestBody:     false,
-			SendResponseBody:    false,
-			IgnoredPathPrefixes: []string{},
+			// Deprecated alias: default mirrors the collector so a partial
+			// [analytics.access_logs_service] override migrates cleanly.
+			AccessLogsServiceCfg: defaultAccessLogsServiceConfig(),
+			AllowPayloads:        false,
+			SendRequestBody:      false,
+			SendResponseBody:     false,
 		},
 		TracingConfig: TracingConfig{
 			Enabled:            false,
@@ -497,6 +535,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid logging.format: %s (must be json or text)", c.PolicyEngine.Logging.Format)
 	}
 
+	if err := c.validateCollectorConfig(); err != nil {
+		return err
+	}
 	if c.Analytics.Enabled {
 		if err := c.validateAnalyticsConfig(); err != nil {
 			return fmt.Errorf("analytics configuration validation failed: %v", err)
@@ -553,49 +594,92 @@ func (c *Config) validateXDSConfig() error {
 	return nil
 }
 
-// validateAnalyticsConfig validates the analytics configuration
+// validateCollectorConfig migrates deprecated analytics capture aliases onto the
+// collector and enforces the collector prerequisite: a consumer (analytics or
+// traffic logging) cannot be enabled unless the collector that feeds it is enabled.
+func (c *Config) validateCollectorConfig() error {
+	c.migrateDeprecatedAnalyticsCapture()
+	c.migrateDeprecatedAnalyticsTransport()
+
+	if (c.Analytics.Enabled || c.TrafficLogging.Enabled) && !c.Collector.Enabled {
+		return fmt.Errorf("collector.enabled must be true when analytics.enabled or traffic_logging.enabled is set (the collector provides the data they consume)")
+	}
+	if c.Collector.Enabled {
+		if err := validateAccessLogsServiceConfig(c.Collector.AccessLogsServiceCfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateDeprecatedAnalyticsTransport maps a deprecated [analytics].access_logs_service
+// override onto the collector when the collector's receiver tuning is still at its
+// default, so existing configs keep working after the transport moved to [collector].
+func (c *Config) migrateDeprecatedAnalyticsTransport() {
+	def := defaultAccessLogsServiceConfig()
+	if c.Analytics.AccessLogsServiceCfg != def {
+		slog.Warn("analytics.access_logs_service is deprecated; use collector.access_logs_service instead")
+		if c.Collector.AccessLogsServiceCfg == def {
+			c.Collector.AccessLogsServiceCfg = c.Analytics.AccessLogsServiceCfg
+		}
+	}
+}
+
+// validateAccessLogsServiceConfig validates the policy-engine ALS receiver tuning.
+func validateAccessLogsServiceConfig(als AccessLogsServiceConfig) error {
+	switch als.Mode {
+	case "uds", "":
+		// UDS mode (default) - port is unused
+	case "tcp":
+		if als.ServerPort <= 0 || als.ServerPort > 65535 {
+			return fmt.Errorf("collector.access_logs_service.server_port must be between 1 and 65535, got %d", als.ServerPort)
+		}
+	default:
+		return fmt.Errorf("collector.access_logs_service.mode must be 'uds' or 'tcp', got: %s", als.Mode)
+	}
+	if als.ShutdownTimeout <= 0 {
+		return fmt.Errorf("collector.access_logs_service.shutdown_timeout must be positive, got %s", als.ShutdownTimeout)
+	}
+	if als.ExtProcMaxMessageSize <= 0 {
+		return fmt.Errorf("collector.access_logs_service.max_message_size must be positive, got %d", als.ExtProcMaxMessageSize)
+	}
+	if als.ExtProcMaxHeaderLimit <= 0 {
+		return fmt.Errorf("collector.access_logs_service.max_header_limit must be positive, got %d", als.ExtProcMaxHeaderLimit)
+	}
+	if als.ExtProcMaxHeaderLimit > math.MaxUint32 {
+		return fmt.Errorf("collector.access_logs_service.max_header_limit must be <= %d, got %d", uint64(math.MaxUint32), als.ExtProcMaxHeaderLimit)
+	}
+	return nil
+}
+
+// migrateDeprecatedAnalyticsCapture maps the deprecated analytics.allow_payloads /
+// analytics.send_request_body / analytics.send_response_body onto the collector's
+// body-capture flags (when the collector flag is not already set), so existing
+// configs keep working after capture settings moved under [collector].
+func (c *Config) migrateDeprecatedAnalyticsCapture() {
+	// Directional aliases take precedence over allow_payloads.
+	if c.Analytics.SendRequestBody && !c.Collector.SendRequestBody {
+		slog.Warn("analytics.send_request_body is deprecated; use collector.send_request_body instead")
+		c.Collector.SendRequestBody = true
+	}
+	if c.Analytics.SendResponseBody && !c.Collector.SendResponseBody {
+		slog.Warn("analytics.send_response_body is deprecated; use collector.send_response_body instead")
+		c.Collector.SendResponseBody = true
+	}
+	// allow_payloads only fills in when no directional body capture is configured.
+	if c.Analytics.AllowPayloads {
+		slog.Warn("analytics.allow_payloads is deprecated; use collector.send_request_body and collector.send_response_body instead")
+		if !c.Collector.SendRequestBody && !c.Collector.SendResponseBody {
+			c.Collector.SendRequestBody = true
+			c.Collector.SendResponseBody = true
+		}
+	}
+}
+
+// validateAnalyticsConfig validates the analytics consumer configuration (publishers).
+// ALS transport validation lives in validateCollectorConfig.
 func (c *Config) validateAnalyticsConfig() error {
-	// Validate analytics configuration
 	if c.Analytics.Enabled {
-		// Migration path for deprecated analytics.allow_payloads.
-		// Runs when both directional flags are false, which is indistinguishable
-		// from "not set" because bool fields cannot represent unset vs explicit false.
-		if c.Analytics.AllowPayloads {
-			slog.Warn("analytics.allow_payloads is deprecated; use analytics.send_request_body and analytics.send_response_body instead")
-			if !c.Analytics.SendRequestBody && !c.Analytics.SendResponseBody {
-				c.Analytics.SendRequestBody = true
-				c.Analytics.SendResponseBody = true
-			}
-		}
-
-		// Validate ALS server config (policy-engine side)
-		als := c.Analytics.AccessLogsServiceCfg
-
-		// Validate ALS connection mode
-		switch als.Mode {
-		case "uds", "":
-			// UDS mode (default) - port is unused
-		case "tcp":
-			// TCP mode - validate port
-			if als.ServerPort <= 0 || als.ServerPort > 65535 {
-				return fmt.Errorf("analytics.access_logs_service.server_port must be between 1 and 65535, got %d", als.ServerPort)
-			}
-		default:
-			return fmt.Errorf("analytics.access_logs_service.mode must be 'uds' or 'tcp', got: %s", als.Mode)
-		}
-		if als.ShutdownTimeout <= 0 {
-			return fmt.Errorf("analytics.access_logs_service.shutdown_timeout must be positive, got %s", als.ShutdownTimeout)
-		}
-		if als.ExtProcMaxMessageSize <= 0 {
-			return fmt.Errorf("analytics.access_logs_service.max_message_size must be positive, got %d", als.ExtProcMaxMessageSize)
-		}
-		if als.ExtProcMaxHeaderLimit <= 0 {
-			return fmt.Errorf("analytics.access_logs_service.max_header_limit must be positive, got %d", als.ExtProcMaxHeaderLimit)
-		}
-		if als.ExtProcMaxHeaderLimit > math.MaxUint32 {
-			return fmt.Errorf("analytics.access_logs_service.max_header_limit must be <= %d, got %d", uint64(math.MaxUint32), als.ExtProcMaxHeaderLimit)
-		}
-
 		// Validate enabled publishers
 		for _, publisherName := range c.Analytics.EnabledPublishers {
 			switch publisherName {

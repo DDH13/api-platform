@@ -93,7 +93,11 @@ type Analytics struct {
 	publishers []analytics_publisher.Publisher
 }
 
-// NewAnalytics creates a new instance of Analytics.
+// NewAnalytics creates a new instance of Analytics. Publishers are assembled from
+// each independently-configured consumer of the collected data: the analytics
+// consumer ([analytics], e.g. Moesif) and the traffic-logging consumer
+// ([traffic_logging], stdout JSON). Both rely on the collector being enabled to
+// receive any events.
 func NewAnalytics(cfg *config.Config) *Analytics {
 	analyticsCfg := cfg.Analytics
 	publishers := make([]analytics_publisher.Publisher, 0)
@@ -107,17 +111,21 @@ func NewAnalytics(cfg *config.Config) *Analytics {
 					slog.Info("Moesif publisher added")
 				}
 			case LogAnalyticsPublisher:
-				publisher := analytics_publisher.NewLog(&analyticsCfg.Publishers.Log)
-				publishers = append(publishers, publisher)
-				slog.Info("Log publisher added")
+				slog.Warn("\"log\" in analytics.enabled_publishers is no longer supported; enable stdout traffic logging via [traffic_logging] instead")
 			default:
 				slog.Warn("Unknown publisher type", "type", publisherName)
 			}
 		}
 	}
 
+	// Traffic logging is a standalone consumer, independent of analytics.
+	if cfg.TrafficLogging.Enabled {
+		publishers = append(publishers, analytics_publisher.NewLog(&cfg.TrafficLogging))
+		slog.Info("Traffic logging (stdout) publisher added")
+	}
+
 	if len(publishers) == 0 {
-		slog.Debug("No analytics publishers found. Analytics will not be published.")
+		slog.Debug("No analytics publishers found. Collected events will not be published.")
 	}
 	return &Analytics{
 		cfg:        cfg,
@@ -160,10 +168,10 @@ func (c *Analytics) isInvalid(logEntry *v3.HTTPAccessLogEntry) bool {
 }
 
 // isPathIgnored reports whether the entry's original request path matches any
-// configured analytics.ignored_path_prefixes entry. The original (pre-rewrite)
+// configured collector.ignored_path_prefixes entry. The original (pre-rewrite)
 // path is preferred so prefixes match the client-facing path.
 func (c *Analytics) isPathIgnored(logEntry *v3.HTTPAccessLogEntry) bool {
-	prefixes := c.cfg.Analytics.IgnoredPathPrefixes
+	prefixes := c.cfg.Collector.IgnoredPathPrefixes
 	if len(prefixes) == 0 {
 		return false
 	}
@@ -474,14 +482,14 @@ func (c *Analytics) prepareAnalyticEvent(logEntry *v3.HTTPAccessLogEntry) *dto.E
 		event.Properties["responseHeaders"] = responseHeaders
 	}
 
-	// Optionally attach request and response payloads when enabled via configuration.
-	if c.cfg.Analytics.SendRequestBody {
+	// Optionally attach request and response payloads when enabled via the collector.
+	if c.cfg.Collector.SendRequestBody {
 		if requestPayload, ok := keyValuePairsFromMetadata["request_payload"]; ok && requestPayload != "" {
 			event.Properties["request_payload"] = requestPayload
 			slog.Debug("Analytics request payload captured", "size_bytes", len(requestPayload))
 		}
 	}
-	if c.cfg.Analytics.SendResponseBody {
+	if c.cfg.Collector.SendResponseBody {
 		if responsePayload, ok := keyValuePairsFromMetadata["response_payload"]; ok && responsePayload != "" {
 			event.Properties["response_payload"] = responsePayload
 			slog.Debug("Analytics response payload captured", "size_bytes", len(responsePayload))
